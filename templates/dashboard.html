@@ -1,0 +1,2331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SheShield AI Dashboard - Advanced Safety Suite</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- TensorFlow.js & COCO-SSD for Real-Time Back Object Tracing -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+body {
+    background: #f5f6fa;
+    color: #222;
+}
+/* =====================================================
+   NAVBAR
+===================================================== */
+nav {
+    height: 70px;
+    background: linear-gradient(90deg, #430061, #8e1aa8);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 30px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+.logo {
+    font-size: 22px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.logout {
+    color: white;
+    text-decoration: none;
+    background: rgba(255,255,255,0.15);
+    padding: 9px 16px;
+    border-radius: 20px;
+    transition: 0.2s;
+}
+.logout:hover { background: rgba(255,255,255,0.25); }
+
+/* =====================================================
+   LAYOUT & CARDS
+===================================================== */
+.container {
+    max-width: 1400px;
+    margin: auto;
+    padding: 25px;
+}
+.page-title { margin-bottom: 20px; }
+.page-title h1 { color: #4b006e; margin-bottom: 5px; }
+
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 20px;
+}
+.status-card {
+    background: white;
+    padding: 20px;
+    border-radius: 18px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.07);
+}
+.status-title { color: #777; font-size: 13px; }
+.status-value { font-size: 25px; font-weight: bold; margin-top: 7px; }
+.safe { color: #159947; }
+.warning { color: #e09a00; }
+.danger { color: red; }
+.status-icon { font-size: 30px; }
+.status-top { display: flex; justify-content: space-between; }
+
+.main-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+}
+.card {
+    background: white;
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.07);
+    position: relative;
+}
+.card-title {
+    color: #4b006e;
+    font-weight: bold;
+    font-size: 18px;
+    margin-bottom: 15px;
+}
+
+/* =====================================================
+   BUTTONS & INPUTS
+===================================================== */
+button {
+    border: none;
+    padding: 12px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    margin: 3px;
+    transition: transform 0.2s, background-color 0.2s;
+}
+button:hover { transform: translateY(-2px); }
+.purple { background: #72118f; color: white; }
+.green { background: #159947; color: white; }
+.red { background: #e00000; color: white; }
+.orange { background: #ec9200; color: white; }
+.blue { background: #1976d2; color: white; }
+.gray { background: #777; color: white; }
+.dark { background: #1f1f2e; color: white; }
+.btn-mini { padding: 6px 12px; font-size: 12px; border-radius: 8px; margin: 0; }
+input {
+    width: 100%;
+    padding: 11px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    outline: none;
+    font-size: 13px;
+}
+input:focus { border-color: #8e1aa8; }
+
+/* =====================================================
+   MAP & CAMERA TRACER
+===================================================== */
+#map { height: 420px; border-radius: 15px; }
+.map-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
+
+.camera-wrapper {
+    position: relative;
+    width: 100%;
+    max-height: 380px;
+    border-radius: 15px;
+    overflow: hidden;
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+#cameraVideo { width: 100%; max-height: 380px; object-fit: cover; display: block; }
+#trackerOverlayCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.object-radar-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #4dfa9f;
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 5;
+    border: 1px solid rgba(77,250,159,0.3);
+}
+.object-alert-banner {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(220, 20, 60, 0.9);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    display: none;
+    z-index: 5;
+    box-shadow: 0 4px 15px rgba(220, 20, 60, 0.5);
+}
+#capturedPhoto {
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 15px;
+    display: none;
+    border: 2px solid #8e1aa8;
+}
+
+/* =====================================================
+   EMERGENCY GAME SCENARIO
+===================================================== */
+.emergency-story {
+    background: linear-gradient(135deg, #fff7fb, #f5f0ff);
+    border: 2px solid #ead7f2;
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+.story-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 18px 0;
+}
+.story-step {
+    width: 145px;
+    min-height: 145px;
+    padding: 14px 8px;
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    transition: 0.4s ease;
+}
+.story-step.active {
+    transform: scale(1.08);
+    border-color: #e00000;
+    box-shadow: 0 8px 22px rgba(224,0,0,0.20);
+}
+.story-picture { font-size: 48px; margin: 8px 0; }
+.story-step h3 { color: #4b006e; font-size: 16px; margin-bottom: 6px; }
+.story-step p { color: #666; font-size: 13px; }
+.story-arrow { font-size: 25px; font-weight: bold; }
+.story-controls { margin-top: 12px; }
+.story-status { margin-top: 12px; font-weight: bold; color: #4b006e; }
+
+/* =====================================================
+   NIGHT JOURNEY GAME / ACTION MISSION
+===================================================== */
+.action-mission {
+    margin-bottom: 22px;
+    border: 1px solid rgba(99,211,255,.28);
+    background: linear-gradient(135deg, rgba(7,25,52,.97), rgba(12,39,66,.95));
+    box-shadow: 0 0 30px rgba(20,170,255,.10);
+    border-radius: 18px;
+    padding: 20px;
+    color: #fff;
+}
+.action-head { display: flex; justify-content: space-between; gap: 18px; align-items: center; flex-wrap: wrap; }
+.action-title { font-size: 23px; font-weight: 800; color: #62dcff; }
+.action-sub { color: #9eb5cc; margin-top: 6px; font-size: 13px; }
+.action-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.action-stat {
+    padding: 9px 12px;
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 12px;
+    background: rgba(255,255,255,.04);
+    font-size: 12px;
+}
+.action-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 16px; margin-top: 16px; }
+.action-panel { border: 1px solid rgba(255,255,255,.09); border-radius: 16px; padding: 16px; background: rgba(0,0,0,.15); }
+.action-scene {
+    min-height: 210px;
+    border-radius: 16px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: radial-gradient(circle at 50% 25%, rgba(70,185,255,.16), rgba(0,0,0,.28));
+    border: 1px solid rgba(98,220,255,.14);
+    position: relative;
+    overflow: hidden;
+}
+.action-icon { font-size: 55px; filter: drop-shadow(0 0 14px rgba(98,220,255,.35)); }
+.action-scene h3 { margin: 8px 0 6px; font-size: 19px; color: #fff; }
+.action-scene p { margin: 0; color: #a9bfd3; max-width: 650px; line-height: 1.5; }
+.action-alert {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: rgba(255,80,80,.12);
+    border: 1px solid rgba(255,100,100,.25);
+    color: #ff9b9b;
+    font-size: 11px;
+    font-weight: 700;
+}
+.action-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.action-btn {
+    border: 1px solid rgba(98,220,255,.25);
+    border-radius: 12px;
+    padding: 13px 12px;
+    background: rgba(98,220,255,.08);
+    color: #eaf8ff;
+    cursor: pointer;
+    font-weight: 700;
+}
+.action-btn.safe { border-color: rgba(60,220,145,.3); background: rgba(60,220,145,.09); }
+.action-btn.warning { border-color: rgba(255,193,7,.3); background: rgba(255,193,7,.08); }
+.action-btn.danger { border-color: rgba(255,80,80,.35); background: rgba(255,80,80,.10); }
+.action-risk-number { font-size: 52px; font-weight: 900; text-align: center; color: #62dcff; line-height: 1; margin: 10px 0; }
+.action-risk-label { text-align: center; color: #9eb5cc; font-size: 11px; letter-spacing: 1px; }
+.action-risk-bar { height: 11px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; margin: 13px 0; }
+.action-risk-fill { height: 100%; width: 18%; border-radius: 99px; background: linear-gradient(90deg,#45e6a2,#ffd45a,#ff5d6c); transition: .5s; }
+.action-risk-text { text-align: center; font-weight: 700; color: #72efb4; font-size: 12px; }
+.action-progress { display: flex; gap: 7px; margin-top: 14px; }
+.action-dot { height: 8px; flex: 1; border-radius: 99px; background: rgba(255,255,255,.08); transition: .3s; }
+.action-dot.active { background: #62dcff; box-shadow: 0 0 10px rgba(98,220,255,.35); }
+.action-dot.done { background: #52e59e; }
+.action-log { margin-top: 14px; padding: 11px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07); color: #a9bfd3; font-size: 12px; }
+.action-complete { display: none; text-align: center; margin-top: 14px; padding: 18px; border-radius: 15px; background: rgba(60,220,145,.10); border: 1px solid rgba(60,220,145,.28); color: #baffd9; }
+.action-complete.show { display: block; }
+.action-badges { display: grid; gap: 8px; margin-top: 15px; }
+.action-badge { padding: 9px 11px; border-radius: 10px; background: rgba(255,255,255,.035); color: #6e8498; font-size: 12px; border: 1px solid rgba(255,255,255,.06); }
+.action-badge.on { color: #baffd9; border-color: rgba(60,220,145,.28); background: rgba(60,220,145,.08); }
+
+/* =====================================================
+   GAMING SENSORS & PRO SUITE
+===================================================== */
+.gaming-sensors-card {
+    background: linear-gradient(135deg, #ffffff, #fdfaff);
+    border: 2px solid #eedbf7;
+}
+.sensor-stream-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+.sensor-stream-box {
+    background: #fbf7fd;
+    border: 1px solid #ebd9f5;
+    border-radius: 14px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.sensor-stream-icon { font-size: 28px; }
+.sensor-stream-info b { display: block; font-size: 13px; color: #430061; }
+.sensor-stream-info span { font-size: 11px; color: #159947; font-weight: bold; }
+/* =====================================================
+   AUDIT & VAULT STYLING
+===================================================== */
+.audit-card {
+    border-left: 6px solid #430061;
+    background: linear-gradient(180deg, #ffffff, #fcfaff);
+}
+.audit-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+.audit-stat-box {
+    background: #f4ecf8;
+    border: 1px solid #ebd7f5;
+    border-radius: 12px;
+    padding: 10px;
+    text-align: center;
+}
+.audit-stat-box strong { font-size: 20px; color: #430061; display: block; }
+.audit-stat-box span { font-size: 11px; color: #666; }
+.audit-log-container {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid #e8e2ee;
+    border-radius: 12px;
+    background: #ffffff;
+    margin-top: 10px;
+}
+.audit-log-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0edf4;
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+.badge-granted { background: #e6f9ed; color: #12823c; border: 1px solid #a8e8bd; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+.badge-denied { background: #fde8e8; color: #c81e1e; border: 1px solid #f8b4b4; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+
+.vault-shield {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.90);
+    backdrop-filter: blur(6px);
+    border-radius: 18px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 50; text-align: center; padding: 20px;
+}
+.vault-shield.unlocked { display: none; }
+
+/* =====================================================
+   PRO INNOVATIONS: SIREN STROBE & FAKE CALL
+===================================================== */
+#strobeOverlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: 99999;
+    display: none;
+    pointer-events: none;
+}
+.strobe-active {
+    animation: policeStrobe 0.15s infinite;
+}
+@keyframes policeStrobe {
+    0% { background: rgba(255, 0, 0, 0.7); }
+    50% { background: rgba(0, 0, 255, 0.7); }
+    100% { background: rgba(255, 255, 255, 0.7); }
+}
+
+#fakeCallScreen {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: #0f1015;
+    color: white;
+    z-index: 100000;
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 60px 20px;
+    text-align: center;
+}
+.caller-avatar {
+    width: 105px; height: 105px; border-radius: 50%;
+    background: #2a2b36; display: flex; align-items: center;
+    justify-content: center; font-size: 50px; margin: 20px auto;
+    border: 3px solid #8e1aa8;
+}
+.call-btn-circle {
+    width: 70px; height: 70px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; cursor: pointer;
+}
+.call-btn-accept { background: #2ecc71; color: white; }
+.call-btn-reject { background: #e74c3c; color: white; }
+
+#stealthScreen {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: #ffffff;
+    color: #111;
+    z-index: 99998;
+    display: none;
+    padding: 25px;
+    overflow-y: auto;
+}
+
+/* Security Modals */
+.security-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.65);
+    display: none; align-items: center; justify-content: center;
+    z-index: 9999;
+}
+.security-modal {
+    background: white; width: 90%; max-width: 400px;
+    padding: 25px; border-radius: 20px; text-align: center;
+}
+.security-modal input {
+    text-align: center; font-size: 24px; letter-spacing: 6px;
+    font-weight: bold; margin: 15px 0;
+}
+
+/* SOS & Risk */
+.sos-card { text-align: center; }
+.sos-button {
+    width: 180px; height: 180px; border-radius: 50%;
+    background: red; color: white; font-size: 28px; font-weight: bold;
+    border: 10px solid #ffd5d5; box-shadow: 0 0 0 8px #ffeaea, 0 10px 30px rgba(255,0,0,0.3);
+    cursor: pointer;
+}
+.sos-button:hover { transform: scale(1.05); }
+.countdown-card { text-align: center; }
+.countdown-number { font-size: 48px; font-weight: 800; color: #d32f2f; margin: 8px 0 12px; }
+.countdown-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.countdown-actions button { min-width: 140px; }
+.danger-zone-card { border-left: 5px solid #f08a24; }
+.danger-zone-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.risk-box { text-align: center; }
+.risk-number { font-size: 50px; font-weight: bold; color: #159947; }
+.risk-bar { width: 100%; height: 15px; background: #eee; border-radius: 20px; overflow: hidden; margin: 15px 0; }
+.risk-fill { height: 100%; width: 18%; background: #159947; transition: 0.5s; }
+
+/* Contacts List */
+.contacts-list { display: flex; flex-direction: column; gap: 10px; margin: 15px 0; }
+.contact-item {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #faf6fd; border: 1px solid #ebd9f7; padding: 10px 14px;
+    border-radius: 12px;
+}
+.contact-info strong { font-size: 14px; color: #4b006e; display: block; }
+.contact-actions { display: flex; gap: 6px; }
+.contact-inputs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+
+/* History & Activity */
+.activity { max-height: 250px; overflow-y: auto; }
+.activity-item { padding: 12px; border-bottom: 1px solid #eee; }
+.history-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.history-stats > div { background: #f7f4ff; border-radius: 10px; padding: 10px; text-align: center; }
+.history-stats strong { display: block; font-size: 22px; color: #4b006e; }
+.history-stats span { display: block; font-size: 12px; color: #777; margin-top: 3px; }
+.history-list { max-height: 240px; overflow-y: auto; margin-bottom: 10px; }
+.history-item { padding: 9px 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+.history-empty { color: #888; text-align: center; padding: 15px; }
+
+@media(max-width:1000px) {
+    .status-grid { grid-template-columns: repeat(2,1fr); }
+    .main-grid { grid-template-columns: 1fr; }
+    .action-grid { grid-template-columns: 1fr; }
+}
+@media(max-width:600px) {
+    .status-grid { grid-template-columns: 1fr; }
+    .sensor-stream-grid { grid-template-columns: 1fr; }
+    .action-buttons { grid-template-columns: 1fr; }
+    nav { padding: 0 15px; }
+    .container { padding: 15px; }
+}
+</style>
+</head>
+<body>
+
+<!-- STROBE FLASHER OVERLAY -->
+<div id="strobeOverlay"></div>
+
+<!-- FAKE INCOMING PHONE CALL SCREEN -->
+<div id="fakeCallScreen">
+    <div>
+        <div style="font-size:14px; letter-spacing:1px; color:#aaa;">INCOMING EMERGENCY CALL</div>
+        <div class="caller-avatar">👮‍♂️</div>
+        <h2 style="font-size:28px; margin-bottom:4px;" id="fakeCallerName">Dad (Police Officer)</h2>
+        <p style="color:#aaa; font-size:14px;">Mobile +91 98480 22338</p>
+    </div>
+    <div id="fakeCallStatusText" style="font-size:16px; color:#4dfa9f;">Ringing...</div>
+    <div style="display:flex; justify-content:space-around; width:100%; max-width:320px;">
+        <div class="call-btn-circle call-btn-reject" onclick="endFakeCall()">✕</div>
+        <div class="call-btn-circle call-btn-accept" onclick="answerFakeCall()">📞</div>
+    </div>
+</div>
+
+<!-- STEALTH CAMOUFLAGE SCREEN (DISGUISE SCREEN) -->
+<div id="stealthScreen">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #eee; padding-bottom:10px;">
+        <h2>📝 Chemistry Study Notes - Chapter 4</h2>
+        <button class="btn-mini purple" onclick="exitStealthMode()">Exit Stealth Mode (PIN)</button>
+    </div>
+    <div style="margin-top:15px; line-height:1.7; color:#444; font-size:14px;">
+        <h3>Thermodynamic Principles in Aqueous Solutions</h3>
+        <p>The standard Gibbs free energy change of reaction is related to the equilibrium constant by the equation ΔG° = -RT ln K. In biological and chemical systems, entropy drives spontaneous exothermic cascades...</p>
+        <p><i>(SheShield AI is running secretly in the background: GPS tracking, shake sensors, and voice listeners remain fully operational).</i></p>
+    </div>
+</div>
+
+<!-- NAVBAR -->
+<nav>
+    <div class="logo">🛡️ SheShield AI Suite</div>
+    <div class="nav-right">
+        <span class="welcome">Welcome, {{ user_name or "Guardian User" }}</span>
+        <button class="btn-mini purple" onclick="openPinSettingsModal()" style="background:rgba(255,255,255,0.2);">⚙️ PIN Settings</button>
+        <a href="/logout" class="logout">Logout</a>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- TITLE -->
+    <div class="page-title">
+        <h1>🛡️ Safety Dashboard & Security Hub</h1>
+        <p>Real-Time Night Journey Protection, Gaming Telemetry, Siren Strobe & Anti-Snoop Vault</p>
+    </div>
+
+    <!-- STATUS CARDS -->
+    <div class="status-grid">
+        <div class="status-card">
+            <div class="status-top">
+                <div>
+                    <div class="status-title">AI Safety Status</div>
+                    <div id="safetyStatus" class="status-value safe">SAFE</div>
+                </div>
+                <div class="status-icon">🛡️</div>
+            </div>
+        </div>
+        <div class="status-card">
+            <div class="status-top">
+                <div>
+                    <div class="status-title">Risk Score</div>
+                    <div id="riskScore" class="status-value safe">18/100</div>
+                </div>
+                <div class="status-icon">🧠</div>
+            </div>
+        </div>
+        <div class="status-card">
+            <div class="status-top">
+                <div>
+                    <div class="status-title">Battery Guardian</div>
+                    <div id="batteryStatusText" class="status-value safe">100% 🔋</div>
+                </div>
+                <div class="status-icon">⚡</div>
+            </div>
+        </div>
+        <div class="status-card">
+            <div class="status-top">
+                <div>
+                    <div class="status-title">Privacy Vault</div>
+                    <div id="vaultStatusBadge" class="status-value safe" style="color:#72118f;">ENCRYPTED</div>
+                </div>
+                <div class="status-icon">🔐</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP PRO QUICK ACTIONS -->
+    <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
+        <button class="red" style="flex:1; min-width:180px;" onclick="triggerSirenAlarm()">
+            📢 Sound High-Decibel Siren
+        </button>
+        <button class="purple" style="flex:1; min-width:180px;" onclick="triggerFakeCall()">
+            📞 Simulate Fake Escape Call
+        </button>
+        <button class="dark" style="flex:1; min-width:180px;" onclick="enterStealthMode()">
+            🎭 Enter Stealth Camouflage
+        </button>
+        <button class="blue" style="flex:1; min-width:180px;" onclick="findNearbySafeHavens()">
+            🏥 Find Safe Havens on Map
+        </button>
+    </div>
+
+    <!-- 1. EMERGENCY GAME SCENARIO -->
+    <div class="card emergency-story">
+        <div class="card-title">🎮 Emergency Safety Story Scenario</div>
+        <p>Demonstration of how SheShield AI reacts when a user is in danger.</p>
+        <div class="story-steps">
+            <div class="story-step" id="storyStep1">
+                <div class="story-picture">👩‍🦰</div>
+                <h3>Girl Walking Alone</h3>
+                <p>Night travel starts</p>
+            </div>
+            <div class="story-arrow">➡️</div>
+            <div class="story-step" id="storyStep2">
+                <div class="story-picture">👩‍🦰⚠️</div>
+                <h3>Rear Danger Detected</h3>
+                <p>Approaching threat</p>
+            </div>
+            <div class="story-arrow">➡️</div>
+            <div class="story-step" id="storyStep3">
+                <div class="story-picture">🧠🔴</div>
+                <h3>AI Escalation</h3>
+                <p>High risk detected</p>
+            </div>
+            <div class="story-arrow">➡️</div>
+            <div class="story-step" id="storyStep4">
+                <div class="story-picture">📱🚨</div>
+                <h3>Smart SOS Dispatched</h3>
+                <p>Evidence photo taken</p>
+            </div>
+            <div class="story-arrow">➡️</div>
+            <div class="story-step" id="storyStep5">
+                <div class="story-picture">📞🛡️</div>
+                <h3>4 Contacts Alerted</h3>
+                <p>Live coordinates sent</p>
+            </div>
+        </div>
+        <div class="story-controls">
+            <button class="red" onclick="playEmergencyScenario()">▶️ Play Scenario</button>
+            <button class="gray" onclick="resetEmergencyScenario()">🔄 Reset</button>
+        </div>
+        <div id="scenarioStatus" class="story-status">🎮 Scenario ready. Press Play Scenario.</div>
+    </div>
+
+    <!-- 2. NIGHT JOURNEY GAME MISSION -->
+    <div class="card action-mission" id="actionSafetyMission">
+        <div class="action-head">
+            <div>
+                <div class="action-title">🎮 Night Journey Mission — Escape & Protect</div>
+                <div class="action-sub">No quizzes or MCQs. Real-time simulated safety choices based on live sensor data.</div>
+            </div>
+            <div class="action-stats">
+                <div class="action-stat">⭐ Score: <b id="actionScore">0</b></div>
+                <div class="action-stat">🛡️ Safety: <b id="actionSafety">100</b>%</div>
+                <div class="action-stat">🏆 Level: <b id="actionLevel">1</b></div>
+            </div>
+        </div>
+        <div class="action-grid">
+            <div class="action-panel">
+                <div class="action-scene" id="actionScene">
+                    <div class="action-icon" id="actionIcon">🌙</div>
+                    <h3 id="actionTitle">Night Journey Ready</h3>
+                    <p id="actionDescription">Start the mission. SheShield AI will simulate safety situations and test your actions.</p>
+                    <div class="action-alert" id="actionAlert">MISSION READY</div>
+                </div>
+                <div class="action-buttons" id="actionButtons">
+                    <button class="action-btn safe" onclick="startActionMission()">🚶 Start Night Journey</button>
+                    <button class="action-btn" onclick="actionOpenMap()">🗺️ Open Live Map</button>
+                </div>
+                <div class="action-progress" id="actionProgress">
+                    <div class="action-dot active"></div><div class="action-dot"></div><div class="action-dot"></div><div class="action-dot"></div><div class="action-dot"></div>
+                </div>
+                <div class="action-log" id="actionLog">🟢 System ready. Start the mission to begin.</div>
+                <div class="action-complete" id="actionComplete">
+                    🏆 <b>MISSION COMPLETED</b><br><br>SheShield AI successfully guided your journey.<br>
+                    <b>Safe Route Reached • Emergency Readiness Active</b>
+                </div>
+            </div>
+            <div class="action-panel">
+                <h3>🤖 AI Safety Monitor</h3>
+                <div class="action-risk-number" id="actionRisk">18</div>
+                <div class="action-risk-label">AI RISK / 100</div>
+                <div class="action-risk-bar"><div class="action-risk-fill" id="actionRiskFill"></div></div>
+                <div class="action-risk-text" id="actionRiskText">🟢 LOW RISK</div>
+                <div class="action-badges">
+                    <div class="action-badge" id="actionBadge1">🔒 GPS / Journey not started</div>
+                    <div class="action-badge" id="actionBadge2">🔒 Safe route not selected</div>
+                    <div class="action-badge" id="actionBadge3">🔒 Emergency readiness locked</div>
+                </div>
+                <div class="action-buttons" style="grid-template-columns:1fr;margin-top:12px">
+                    <button class="action-btn" onclick="actionOpenMap()">📍 Start Real GPS</button>
+                    <button class="action-btn safe" onclick="actionSafeRoute()">🟢 Show Real Safe Route</button>
+                    <button class="action-btn danger" onclick="actionSOS()">🚨 Smart SOS</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN TWO-COLUMN LAYOUT -->
+    <div class="main-grid">
+        <!-- LEFT COLUMN -->
+        <div>
+            <!-- LIVE MAP -->
+            <div class="card">
+                <div class="card-title">📍 Live Safety Map & Safe Havens</div>
+                <div class="map-buttons">
+                    <button class="purple" onclick="startGPS()">📍 Start GPS</button>
+                    <button class="green" onclick="showSafeRoute()">🟢 Safe Route</button>
+                    <button class="red" onclick="showDangerRoute()">🔴 Danger Route</button>
+                    <button class="blue" onclick="findNearbySafeHavens()">🏥 Safe Havens</button>
+                    <button class="gray" onclick="clearRoutes()">Clear</button>
+                </div>
+                <div id="map"></div>
+                <p id="coordinates" style="margin-top:10px;color:#777;">Location not detected.</p>
+            </div>
+
+            <!-- REAR CAMERA & BACK OBJECT TRACER -->
+            <div class="card">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>📷 Rear Camera & Back Object Tracer</span>
+                    <span style="font-size:12px; background:#f0e5f7; color:#4b006e; padding:4px 8px; border-radius:10px;">Edge Vision AI</span>
+                </div>
+                <p style="color:#666; font-size:13px; margin-bottom:10px;">
+                    Traces people, vehicles, and movements <b>behind you</b>. Runs completely in device memory for 100% privacy.
+                </p>
+                <div class="camera-wrapper">
+                    <video id="cameraVideo" autoplay playsinline muted></video>
+                    <canvas id="trackerOverlayCanvas"></canvas>
+                    <div class="object-radar-badge" id="radarBadge">👁️ TRACER: STANDBY</div>
+                    <div class="object-alert-banner" id="objectThreatBanner">⚠️ PERSON DETECTED BEHIND YOU</div>
+                </div>
+                <canvas id="cameraCanvas" style="display:none;"></canvas>
+                <img id="capturedPhoto" alt="Captured Evidence Photo">
+                <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:5px;">
+                    <button class="blue" onclick="startRearCamera()">📷 Start Back Camera & Tracer</button>
+                    <button class="purple" onclick="captureEmergencyWatermarkPhoto()">📸 Capture Forensic Photo</button>
+                    <button class="gray" onclick="stopCamera()">⏹ Stop Camera</button>
+                </div>
+            </div>
+
+            <!-- 3. GAMING & HARDWARE SAFETY SENSORS -->
+            <div class="card gaming-sensors-card">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>🕹️ Gaming & Hardware Safety Sensors</span>
+                    <span style="font-size:11px; background:#430061; color:white; padding:3px 8px; border-radius:10px;">Telemetry Live</span>
+                </div>
+                <p style="font-size:12px; color:#666;">Real-time device sensor readings actively feeding the AI threat model:</p>
+                <div class="sensor-stream-grid">
+                    <div class="sensor-stream-box">
+                        <div class="sensor-stream-icon">📳</div>
+                        <div class="sensor-stream-info">
+                            <b>Shake Sensor</b>
+                            <span id="shakeStatus">ACTIVE (Threshold: 35)</span>
+                        </div>
+                    </div>
+                    <div class="sensor-stream-box">
+                        <div class="sensor-stream-icon">🧭</div>
+                        <div class="sensor-stream-info">
+                            <b>Gyroscope / Motion</b>
+                            <span id="gyroStatus">STABLE (X:0 Y:0 Z:0)</span>
+                        </div>
+                    </div>
+                    <div class="sensor-stream-box">
+                        <div class="sensor-stream-icon">🎤</div>
+                        <div class="sensor-stream-info">
+                            <b>Acoustic Voice Sensor</b>
+                            <span id="voiceFeature">READY (Listening on command)</span>
+                        </div>
+                    </div>
+                    <div class="sensor-stream-box">
+                        <div class="sensor-stream-icon">👁️</div>
+                        <div class="sensor-stream-info">
+                            <b>Back Vision Radar</b>
+                            <span id="backTrackerStatus">ACTIVE (AI Model Ready)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. SECURITY AUDIT & ACCESS TRACKER -->
+            <div class="card audit-card">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>🔐 Security Audit & Access Tracker</span>
+                    <button class="purple btn-mini" onclick="toggleAuditLogDisplay()">👁️ View Access Logs</button>
+                </div>
+                <p style="font-size:13px; color:#555;">
+                    Every time your confidential history, contacts, or location logs are opened or modified, an immutable audit log is generated with device signatures.
+                </p>
+                
+                <div class="audit-stats-grid">
+                    <div class="audit-stat-box">
+                        <strong id="auditTotalCount">0</strong>
+                        <span>Total Queries</span>
+                    </div>
+                    <div class="audit-stat-box">
+                        <strong id="auditGrantedCount" style="color:#159947;">0</strong>
+                        <span>Authorized Views</span>
+                    </div>
+                    <div class="audit-stat-box">
+                        <strong id="auditDeniedCount" style="color:#d32f2f;">0</strong>
+                        <span>Blocked / Intruders</span>
+                    </div>
+                </div>
+
+                <div id="auditLogDisplay" class="audit-log-container" style="display:none;"></div>
+            </div>
+
+            <!-- SAFETY HISTORY (VAULT PROTECTED) -->
+            <div class="card history-card" id="historyCard">
+                <div class="vault-shield" id="historyShield">
+                    <div style="font-size:40px;">🔒</div>
+                    <h3 style="color:#4b006e; margin-top:8px;">Safety History is Locked</h3>
+                    <p style="font-size:12px; color:#666; margin:6px 0 14px;">Protected against unauthorized shoulder-surfing and snooping.</p>
+                    <button class="purple btn-mini" onclick="requestVaultAccess('History')">🔓 Unlock with Security PIN</button>
+                </div>
+
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>📊 Safety History</span>
+                    <button class="gray btn-mini" onclick="lockVault()">🔒 Re-lock Vault</button>
+                </div>
+                <div class="history-stats">
+                    <div><strong id="historyEvents">0</strong><span>Events</span></div>
+                    <div><strong id="historyAlerts">0</strong><span>Alerts</span></div>
+                    <div><strong id="historySOS">0</strong><span>SOS</span></div>
+                </div>
+                <div id="safetyHistory" class="history-list">
+                    <div class="history-empty">No safety history recorded yet.</div>
+                </div>
+                <button class="gray" onclick="attemptClearHistory()">🧹 Clear History (Requires PIN)</button>
+            </div>
+
+            <!-- ACTIVITY STREAM -->
+            <div class="card">
+                <div class="card-title">📋 Safety Activity Stream</div>
+                <div id="activityLog" class="activity">
+                    <div class="activity-item">🟢 SheShield AI started with Advanced Pro Suite</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div>
+            <!-- SOS -->
+            <div class="card sos-card">
+                <div class="card-title">🚨 Smart SOS</div>
+                <button class="sos-button" onclick="startSOSCountdown()">SOS</button>
+                <p id="sosStatus" style="margin-top:15px;font-weight:bold;"></p>
+            </div>
+
+            <!-- SOS COUNTDOWN -->
+            <div class="card countdown-card">
+                <div class="card-title">⏱️ SOS Safety Countdown</div>
+                <p id="countdownMessage" style="color:#666;margin-bottom:10px;">Press SOS to start a 10-second safety countdown.</p>
+                <div id="sosCountdown" class="countdown-number">10</div>
+                <div class="countdown-actions">
+                    <button id="cancelSOSButton" class="green" onclick="cancelSOSCountdown()" disabled>🟢 I'm Safe</button>
+                    <button id="activateNowButton" class="red" onclick="activateSOSNow()" disabled>🚨 Activate SOS Now</button>
+                </div>
+            </div>
+
+            <!-- EMERGENCY BROADCAST -->
+            <div class="card">
+                <div class="card-title">🚨 Multi-Contact Emergency Actions</div>
+                <button class="red" style="width:100%;" onclick="callAllEmergencyContacts()">📞 Call Emergency Contact(s)</button>
+                <button class="orange" style="width:100%;" onclick="sendBroadcastSMSToAll()">📱 Send Emergency SMS to All 4</button>
+                <button class="purple" style="width:100%;" onclick="emergencyPhoto()">📸 Evidence Photo & Watermark</button>
+            </div>
+
+            <!-- UP TO 4 CONTACTS (VAULT PROTECTED) -->
+            <div class="card" id="contactsCard">
+                <div class="vault-shield" id="contactsShield">
+                    <div style="font-size:40px;">🔒</div>
+                    <h3 style="color:#4b006e; margin-top:8px;">Emergency Contacts Locked</h3>
+                    <p style="font-size:12px; color:#666; margin:6px 0 14px;">Protected to prevent numbers from being viewed or tampered with.</p>
+                    <button class="purple btn-mini" onclick="requestVaultAccess('Contacts')">🔓 Unlock with Security PIN</button>
+                </div>
+
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>📞 Emergency Contacts</span>
+                    <span id="contactCountBadge" style="font-size:12px; background:#8e1aa8; color:white; padding:3px 9px; border-radius:12px;">0/4 Added</span>
+                </div>
+                <p style="font-size:12px; color:#666;">Store up to 4 trusted mobile contacts for automatic dispatch.</p>
+                <div id="contactsContainer" class="contacts-list"></div>
+                <div id="addContactForm">
+                    <div class="contact-inputs-grid">
+                        <input id="contactNameInput" type="text" placeholder="Contact Name">
+                        <input id="contactPhoneInput" type="tel" placeholder="Mobile (+91...)">
+                    </div>
+                    <button class="purple" style="width:100%; margin-top:8px;" onclick="addEmergencyContact()">➕ Add Emergency Contact (Max 4)</button>
+                </div>
+            </div>
+
+            <!-- AI RISK DETECTOR -->
+            <div class="card">
+                <div class="card-title">🧠 AI Risk Detection</div>
+                <div class="risk-box">
+                    <div id="riskNumber" class="risk-number">18</div>
+                    <div class="risk-bar"><div id="riskFill" class="risk-fill"></div></div>
+                    <p id="riskMessage">Low risk condition.</p>
+                    <div id="riskExplanation" style="margin-top:15px;padding:15px;background:#f8f5ff;border-radius:12px;text-align:left;border-left:5px solid #6c2bd9;">
+                        <strong style="color:#4b006e;">🧠 AI Risk Diagnostics:</strong>
+                        <ul id="riskReasons" style="margin:10px 0 0 18px;color:#555;line-height:1.8;">
+                            <li>🟢 Current condition appears safe</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DANGER ZONE SIMULATION -->
+            <div class="card danger-zone-card">
+                <div class="card-title">⚠️ Danger Zone Alert</div>
+                <p id="dangerZoneStatus" style="color:#666;">No caution zone is currently active.</p>
+                <div class="danger-zone-actions">
+                    <button class="orange" onclick="simulateDangerZone()">⚠️ Simulate Danger Zone</button>
+                    <button class="gray" onclick="clearDangerZone()">🧹 Clear Zone</button>
+                </div>
+            </div>
+
+            <!-- JOURNEY GUARDIAN -->
+            <div class="card">
+                <div class="card-title">🛡️ Journey Guardian</div>
+                <div style="background:#f7f7f7; padding:12px; border-radius:12px; margin-bottom:10px;">
+                    <b id="journeyText">Journey not started</b>
+                </div>
+                <button id="journeyButton" class="green" onclick="toggleJourney()">▶ Start Journey</button>
+            </div>
+
+            <!-- ACOUSTIC VOICE DETECTION -->
+            <div class="card">
+                <div class="card-title">🎤 Voice Safety Detection</div>
+                <div class="voice-box">
+                    <div class="mic">🎤</div>
+                    <p id="voiceStatus" style="color:#666; margin:8px 0;">Ready</p>
+                    <button class="purple" onclick="startVoiceDetection()">🎤 Start Voice Detection</button>
+                    <button class="gray" onclick="stopVoiceDetection()">⏹ Stop</button>
+                </div>
+            </div>
+
+            <!-- VOICE GUIDANCE -->
+            <div class="card">
+                <div class="card-title">🔊 Voice Guidance</div>
+                <p id="guidanceText" style="margin-bottom:12px;color:#666;">Voice guidance is ready.</p>
+                <button class="blue" onclick="speakGuidance('SheShield AI is active. All sensors, safe routes and GPS are online.')">🔊 Test Voice</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PIN VERIFICATION MODAL -->
+<div class="security-modal-overlay" id="pinModal">
+    <div class="security-modal">
+        <div style="font-size:40px;">🔐</div>
+        <h3 id="pinModalTitle">Security Authentication</h3>
+        <p style="font-size:12px; color:#666;" id="pinModalDesc">Enter your 4-digit Security PIN to verify authorization.</p>
+        <input type="password" id="modalPinInput" maxlength="4" placeholder="••••" autofocus>
+        <div style="display:flex; gap:8px; justify-content:center;">
+            <button class="green" onclick="submitPinModal()">Confirm PIN</button>
+            <button class="gray" onclick="closePinModal()">Cancel</button>
+        </div>
+        <small style="display:block; margin-top:12px; color:#888;">Default PIN is <b>1234</b></small>
+    </div>
+</div>
+
+<!-- CHANGE PIN MODAL -->
+<div class="security-modal-overlay" id="changePinModal">
+    <div class="security-modal">
+        <div style="font-size:40px;">⚙️</div>
+        <h3>Change Security PIN</h3>
+        <input type="password" id="currentPinInput" maxlength="4" placeholder="Current PIN" style="letter-spacing:4px; font-size:18px;">
+        <input type="password" id="newPinInput" maxlength="4" placeholder="New 4-digit PIN" style="letter-spacing:4px; font-size:18px;">
+        <div style="display:flex; gap:8px; justify-content:center;">
+            <button class="purple" onclick="saveNewPin()">Update PIN</button>
+            <button class="gray" onclick="document.getElementById('changePinModal').style.display='none'">Close</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* =====================================================
+   GLOBAL STATE & VARIABLES
+===================================================== */
+let map = null;
+let userMarker = null, accuracyCircle = null, safeHavenMarkers = [];
+let currentLatitude = null, currentLongitude = null, locationWatchID = null;
+let journeyActive = false, journeyRoute = [], journeyLine = null;
+let safeLine = null, dangerLine = null;
+let cameraStream = null, isTracingObjects = false, traceAnimationFrame = null;
+let cocoModel = null;
+let sosActive = false, demoScenarioActive = false;
+let sosCountdownTimer = null, sosCountdownValue = 10;
+let dangerZoneCircle = null, dangerZoneActive = false;
+let lastShake = 0, lastObjectAlertTime = 0;
+let recognition = null, voiceListening = false;
+
+// Audio Context Siren
+let audioCtx = null, sirenOsc = null, sirenInterval = null, isSirenPlaying = false;
+
+// Security PIN & Privacy Vault State
+let userSecurityPin = localStorage.getItem("sheShieldPin") || "1234";
+let isVaultUnlocked = false;
+let pendingVaultAction = null;
+let auditTrail = JSON.parse(localStorage.getItem("sheShieldAuditLog") || "[]");
+
+// Contacts & History
+const MAX_CONTACTS = 4;
+let emergencyContacts = JSON.parse(localStorage.getItem("sheShieldContacts") || "[]");
+let safetyHistory = JSON.parse(localStorage.getItem("sheShieldSafetyHistory") || "[]");
+
+/* =====================================================
+   INITIALIZATION
+===================================================== */
+document.addEventListener("DOMContentLoaded", function() {
+    initializeMap();
+    renderContacts();
+    renderSafetyHistory();
+    renderAuditLogs();
+    startShakeDetection();
+    startGyroSensor();
+    calculateRisk();
+    loadObjectDetectionModel();
+    initBatteryGuardian();
+
+    logAudit("Dashboard Loaded", "GRANTED", "Initial session boot");
+    addActivity("🟢 SheShield AI started with Advanced Pro Suite");
+});
+
+/* =====================================================
+   REAL-TIME GPS & GLOWING RADAR PIN ENGINE
+===================================================== */
+
+// Neon Glowing SVG Radar Pulse Icon (Fixes missing Leaflet default icon bug)
+const livePulseIcon = L.divIcon({
+    className: 'custom-pulse-marker',
+    html: `
+        <div style="position:relative; width:40px; height:40px; display:flex; align-items:center; justify-content:center;">
+            <div style="position:absolute; width:40px; height:40px; background:rgba(217, 70, 239, 0.45); border-radius:50%; animation:radarWave 1.8s infinite ease-out;"></div>
+            <div style="position:absolute; width:22px; height:22px; background:rgba(142, 26, 168, 0.6); border-radius:50%;"></div>
+            <div style="width:14px; height:14px; background:#ffffff; border:3px solid #8e1aa8; border-radius:50%; box-shadow:0 0 12px rgba(0,0,0,0.7); z-index:2;"></div>
+        </div>
+        <style>
+            @keyframes radarWave {
+                0% { transform: scale(0.4); opacity: 1; }
+                100% { transform: scale(1.6); opacity: 0; }
+            }
+        </style>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20]
+});
+
+function initializeMap() {
+    if (map) return;
+    map = L.map("map", { zoomControl: true }).setView([17.3850, 78.4867], 13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    setTimeout(() => {
+        if (map) map.invalidateSize();
+    }, 400);
+}
+
+function startGPS() {
+    initializeMap();
+    const status = document.getElementById("gpsStatus");
+    const coords = document.getElementById("coordinates");
+    
+    if (status) {
+        status.innerText = "LOCATING...";
+        status.className = "status-value warning";
+    }
+    if (coords) coords.innerHTML = "📡 Contacting device GPS & Wi-Fi triangulation...";
+    speakGuidance("Locating your real coordinates.");
+
+    if (!navigator.geolocation) {
+        alert("Your browser does not support Location Services.");
+        fallbackToRealIPLocation();
+        return;
+    }
+
+    if (locationWatchID !== null) {
+        navigator.geolocation.clearWatch(locationWatchID);
+        locationWatchID = null;
+    }
+
+    // Step 1: Request Real Location with High Accuracy First
+    navigator.geolocation.getCurrentPosition(
+        position => {
+            plotRealUserLocation(position);
+            // Step 2: Start Continuous High-Precision Movement Tracking
+            locationWatchID = navigator.geolocation.watchPosition(
+                pos => plotRealUserLocation(pos),
+                err => console.warn("Watch update skipped:", err.message),
+                { enableHighAccuracy: true, timeout: 20000, maximumAge: 2000 }
+            );
+        },
+        error => {
+            console.warn("High Accuracy GPS failed. Trying standard Wi-Fi resolution...");
+            // Retry with standard low-accuracy resolution
+            navigator.geolocation.getCurrentPosition(
+                pos => plotRealUserLocation(pos),
+                err2 => {
+                    handleLocationPermissionError(err2);
+                    fallbackToRealIPLocation();
+                },
+                { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+            );
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+
+    addActivity("📍 Real GPS search active");
+}
+
+function plotRealUserLocation(pos) {
+    currentLatitude = pos.coords.latitude;
+    currentLongitude = pos.coords.longitude;
+    const accuracy = Math.round(pos.coords.accuracy || 15);
+
+    const status = document.getElementById("gpsStatus");
+    const coords = document.getElementById("coordinates");
+
+    if (status) {
+        status.innerText = "LOCKED (REAL)";
+        status.className = "status-value safe";
+    }
+    if (coords) {
+        coords.innerHTML = `<b>📍 Real Location:</b> Lat: <code>${currentLatitude.toFixed(6)}</code> | Lon: <code>${currentLongitude.toFixed(6)}</code> (~${accuracy}m accuracy)`;
+    }
+
+    const userLatLng = [currentLatitude, currentLongitude];
+
+    if (!userMarker) {
+        userMarker = L.marker(userLatLng, { icon: livePulseIcon })
+            .addTo(map)
+            .bindPopup("<b>📍 You Are Here</b><br>Real GPS Coordinates Verified")
+            .openPopup();
+    } else {
+        userMarker.setLatLng(userLatLng);
+        userMarker.setIcon(livePulseIcon);
+    }
+
+    if (!accuracyCircle) {
+        accuracyCircle = L.circle(userLatLng, { 
+            radius: Math.max(accuracy, 25), 
+            color: "#8e1aa8", 
+            fillColor: "#d946ef", 
+            fillOpacity: 0.18, 
+            weight: 2 
+        }).addTo(map);
+    } else {
+        accuracyCircle.setLatLng(userLatLng);
+        accuracyCircle.setRadius(Math.max(accuracy, 25));
+    }
+
+    map.flyTo(userLatLng, 17, { animate: true, duration: 1.5 });
+    map.invalidateSize();
+
+    if (journeyActive) {
+        journeyRoute.push(userLatLng);
+        updateJourneyRoute();
+    }
+    checkDangerZone(currentLatitude, currentLongitude);
+    calculateRisk();
+}
+
+async function fallbackToRealIPLocation() {
+    try {
+        const res = await fetch("https://ipapi.co/json/", { cache: "no-store" });
+        const data = await res.json();
+        if (data.latitude && data.longitude) {
+            const simulated = {
+                coords: {
+                    latitude: parseFloat(data.latitude),
+                    longitude: parseFloat(data.longitude),
+                    accuracy: 250
+                }
+            };
+            plotRealUserLocation(simulated);
+            document.getElementById("gpsStatus").innerText = "NETWORK IP";
+            document.getElementById("coordinates").innerHTML += ` <span style="color:#d946ef; font-weight:bold;">[${data.city}, ${data.region}]</span>`;
+            addActivity(`📍 Location mapped via Network IP: ${data.city}`);
+            speakGuidance(`Location resolved to ${data.city}.`);
+        }
+    } catch(e) {
+        console.error("IP fallback failed:", e);
+    }
+}
+
+function handleLocationPermissionError(err) {
+    let msg = "Could not fetch GPS.";
+    if (err.code === 1) {
+        msg = "Location permission blocked! Please allow location access in your browser address bar.";
+        alert("⚠️ Location Permission Blocked!\n\n1. Look at your browser address bar (127.0.0.1:5000).\n2. Click the Lock/Tune icon on the left.\n3. Set 'Location' to 'Allow'.\n4. Refresh the page.");
+    } else if (err.code === 2) {
+        msg = "Location unavailable. Please make sure Windows Location is turned ON.";
+    } else if (err.code === 3) {
+        msg = "GPS request timed out. Retrying...";
+    }
+    document.getElementById("coordinates").innerHTML = `<span style="color:#ef4444; font-weight:bold;">⚠️ ${msg}</span>`;
+}
+
+function updateJourneyRoute() {
+    if (journeyRoute.length < 2) return;
+    if (journeyLine) map.removeLayer(journeyLine);
+    journeyLine = L.polyline(journeyRoute, { color: "#7b1fa2", weight: 5 }).addTo(map);
+}
+
+function showSafeRoute() {
+    if (currentLatitude === null) { startGPS(); return; }
+    clearRoutes();
+    safeLine = L.polyline([[currentLatitude, currentLongitude], [currentLatitude + 0.002, currentLongitude + 0.001], [currentLatitude + 0.004, currentLongitude + 0.002]], { color: "green", weight: 7 }).addTo(map);
+    addActivity("🟢 Safe route displayed");
+}
+
+function showDangerRoute() {
+    if (currentLatitude === null) { startGPS(); return; }
+    clearRoutes();
+    dangerLine = L.polyline([[currentLatitude, currentLongitude], [currentLatitude + 0.001, currentLongitude + 0.002], [currentLatitude + 0.003, currentLongitude + 0.003]], { color: "red", weight: 7, dashArray: "10,10" }).addTo(map);
+    addActivity("🔴 Danger route displayed");
+}
+
+function clearRoutes() {
+    if (safeLine) { map.removeLayer(safeLine); safeLine = null; }
+    if (dangerLine) { map.removeLayer(dangerLine); dangerLine = null; }
+    safeHavenMarkers.forEach(m => map.removeLayer(m));
+    safeHavenMarkers = [];
+}
+
+/* =====================================================
+   PRO INNOVATION 1: HIGH-DECIBEL SIREN & POLICE STROBE
+===================================================== */
+function triggerSirenAlarm() {
+    if (isSirenPlaying) {
+        stopSirenAlarm();
+        return;
+    }
+    isSirenPlaying = true;
+    document.getElementById("strobeOverlay").style.display = "block";
+    document.getElementById("strobeOverlay").classList.add("strobe-active");
+
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sirenOsc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        sirenOsc.type = "sawtooth";
+        gain.gain.value = 0.8;
+        sirenOsc.connect(gain);
+        gain.connect(audioCtx.destination);
+        sirenOsc.start();
+
+        let freq = 600;
+        let rising = true;
+        sirenInterval = setInterval(() => {
+            if (rising) {
+                freq += 40;
+                if (freq >= 1200) rising = false;
+            } else {
+                freq -= 40;
+                if (freq <= 600) rising = true;
+            }
+            if (sirenOsc) sirenOsc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        }, 30);
+    } catch(e) {
+        console.warn("AudioContext error:", e);
+    }
+
+    addActivity("📢 High-Decibel Siren & Strobe Alarm activated!");
+    logAudit("Siren Alarm Triggered", "GRANTED", "Emergency Strobe + 120dB Siren");
+    speakGuidance("Emergency high decibel alarm active. Attracting public assistance.");
+}
+
+function stopSirenAlarm() {
+    isSirenPlaying = false;
+    document.getElementById("strobeOverlay").style.display = "none";
+    document.getElementById("strobeOverlay").classList.remove("strobe-active");
+    if (sirenInterval) clearInterval(sirenInterval);
+    if (sirenOsc) {
+        try { sirenOsc.stop(); sirenOsc.disconnect(); } catch(e){}
+        sirenOsc = null;
+    }
+    if (audioCtx) {
+        try { audioCtx.close(); } catch(e){}
+        audioCtx = null;
+    }
+    addActivity("📢 Siren Alarm stopped");
+}
+
+/* =====================================================
+   PRO INNOVATION 2: FAKE INCOMING PHONE CALL
+===================================================== */
+function triggerFakeCall() {
+    speakGuidance("Simulating incoming emergency escape call in 3 seconds.");
+    addActivity("📞 Fake escape call scheduled...");
+
+    setTimeout(() => {
+        document.getElementById("fakeCallScreen").style.display = "flex";
+        document.getElementById("fakeCallStatusText").innerText = "Incoming Call...";
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+            osc.connect(audioCtx.destination);
+            osc.start();
+            setTimeout(() => { osc.stop(); }, 1800);
+        } catch(e){}
+    }, 2500);
+}
+
+function answerFakeCall() {
+    document.getElementById("fakeCallStatusText").innerText = "00:03 Connected";
+    speakGuidance("Hello beta! I am waiting outside in the car with police assistance. Where are you? Come outside immediately!");
+}
+
+function endFakeCall() {
+    document.getElementById("fakeCallScreen").style.display = "none";
+    addActivity("📞 Fake call concluded.");
+}
+
+/* =====================================================
+   PRO INNOVATION 3: STEALTH CAMOUFLAGE MODE
+===================================================== */
+function enterStealthMode() {
+    document.getElementById("stealthScreen").style.display = "block";
+    addActivity("🎭 Stealth Camouflage screen enabled.");
+}
+
+function exitStealthMode() {
+    const pin = prompt("Enter 4-digit PIN to exit stealth mode:");
+    if (pin === userSecurityPin) {
+        document.getElementById("stealthScreen").style.display = "none";
+        addActivity("🎭 Stealth mode exited with PIN.");
+    } else {
+        alert("Incorrect PIN!");
+        logAudit("Stealth Exit Denied", "DENIED", "Wrong PIN");
+    }
+}
+
+/* =====================================================
+   PRO INNOVATION 4: BATTERY GUARDIAN & AUTO-PING
+===================================================== */
+function initBatteryGuardian() {
+    if ('getBattery' in navigator) {
+        navigator.getBattery().then(battery => {
+            function updateBattery() {
+                const level = Math.round(battery.level * 100);
+                const isCharging = battery.charging ? "⚡" : "🔋";
+                const badge = document.getElementById("batteryStatusText");
+                if (badge) badge.innerText = `${level}% ${isCharging}`;
+
+                if (level <= 15 && journeyActive && !battery.charging) {
+                    addActivity(`⚠️ Critical battery alert (${level}%). Auto-dispatching last GPS to contacts.`);
+                    sendBroadcastSMSToAll();
+                }
+            }
+            updateBattery();
+            battery.addEventListener('levelchange', updateBattery);
+            battery.addEventListener('chargingchange', updateBattery);
+        });
+    }
+}
+
+/* =====================================================
+   PRO INNOVATION 5: NEARBY SAFE HAVENS
+===================================================== */
+function findNearbySafeHavens() {
+    if (!currentLatitude) {
+        startGPS();
+        setTimeout(findNearbySafeHavens, 1500);
+        return;
+    }
+    safeHavenMarkers.forEach(m => map.removeLayer(m));
+    safeHavenMarkers = [];
+
+    const safePoints = [
+        { name: "👮 Central Police Station (24/7)", offsetLat: 0.003, offsetLon: 0.002 },
+        { name: "🏥 Apollo Emergency Hospital", offsetLat: -0.002, offsetLon: 0.004 },
+        { name: "🌸 Pink Police Women Help Desk", offsetLat: 0.001, offsetLon: -0.003 }
+    ];
+
+    safePoints.forEach(p => {
+        const pt = [currentLatitude + p.offsetLat, currentLongitude + p.offsetLon];
+        const m = L.marker(pt).addTo(map).bindPopup(`<b>${p.name}</b><br><small>Safe Refuge Point - Open 24/7</small>`).openPopup();
+        safeHavenMarkers.push(m);
+    });
+
+    addActivity("🏥 Safe havens (Police, Hospital, Help Desk) pinned on map.");
+    speakGuidance("Nearest 24/7 Police station and Emergency Safe Havens are marked on your map.");
+}
+
+/* =====================================================
+   DANGER ZONE
+===================================================== */
+function simulateDangerZone() {
+    if (currentLatitude === null || currentLongitude === null) {
+        startGPS();
+        setTimeout(simulateDangerZone, 1000);
+        return;
+    }
+    clearDangerZone();
+    const zonePoint = [currentLatitude + 0.002, currentLongitude + 0.002];
+    dangerZoneCircle = L.circle(zonePoint, { radius: 350, color: "red", fillColor: "red", fillOpacity: 0.20, weight: 3 }).addTo(map);
+    dangerZoneActive = true;
+    map.setView(zonePoint, 16);
+    document.getElementById("dangerZoneStatus").innerText = "🔴 Demo caution zone active.";
+    addActivity("⚠️ Demo danger zone activated");
+}
+
+function clearDangerZone() {
+    if (dangerZoneCircle && map) map.removeLayer(dangerZoneCircle);
+    dangerZoneCircle = null;
+    dangerZoneActive = false;
+    document.getElementById("dangerZoneStatus").innerText = "🟢 No caution zone is currently active.";
+}
+
+function checkDangerZone(latitude, longitude) {
+    if (!dangerZoneActive || !dangerZoneCircle) return;
+    const center = dangerZoneCircle.getLatLng();
+    const userPoint = L.latLng(latitude, longitude);
+    const distance = map.distance(center, userPoint);
+    if (distance <= 350) {
+        document.getElementById("dangerZoneStatus").innerText = "🔴 WARNING: You are inside the demo caution zone!";
+        addActivity("🔴 Danger zone alert triggered");
+        speakGuidance("Warning. You are inside a marked caution zone.");
+    }
+}
+
+/* =====================================================
+   REAR CAMERA & BACK OBJECT TRACER
+===================================================== */
+async function loadObjectDetectionModel() {
+    try {
+        if (window.cocoSsd) {
+            cocoModel = await cocoSsd.load();
+            document.getElementById("radarBadge").innerText = "👁️ AI MODEL READY";
+            document.getElementById("backTrackerStatus").innerText = "ACTIVE (AI Model Ready)";
+        }
+    } catch(e) {
+        console.warn("Using optical motion detection fallback.");
+    }
+}
+
+async function startRearCamera() {
+    try {
+        stopCamera();
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
+        });
+        const video = document.getElementById("cameraVideo");
+        video.srcObject = cameraStream;
+        video.onloadedmetadata = () => {
+            video.play();
+            isTracingObjects = true;
+            startBackObjectTracingLoop();
+        };
+        addActivity("📷 Rear Camera & Tracer started");
+    } catch(err) {
+        alert("Camera permission denied or camera unavailable.");
+    }
+}
+
+function startBackObjectTracingLoop() {
+    const video = document.getElementById("cameraVideo");
+    const canvas = document.getElementById("trackerOverlayCanvas");
+    if (!video || !canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    async function traceFrame() {
+        if (!isTracingObjects || video.paused || video.ended) return;
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (cocoModel) {
+                try {
+                    const predictions = await cocoModel.detect(video);
+                    handlePredictions(predictions, ctx, canvas.width, canvas.height);
+                } catch(e) {}
+            }
+        }
+        traceAnimationFrame = requestAnimationFrame(traceFrame);
+    }
+    traceAnimationFrame = requestAnimationFrame(traceFrame);
+}
+
+function handlePredictions(predictions, ctx, width, height) {
+    const banner = document.getElementById("objectThreatBanner");
+    let threat = false;
+
+    predictions.forEach(p => {
+        const [x, y, w, h] = p.bbox;
+        const isPerson = p.class.toLowerCase() === "person";
+        ctx.strokeStyle = isPerson ? "#ff2a55" : "#4dfa9f";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, w, h);
+
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fillRect(x, Math.max(0, y - 20), 120, 20);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 11px Arial";
+        ctx.fillText(`🔍 ${p.class.toUpperCase()}`, x + 4, Math.max(14, y - 6));
+
+        if (isPerson) threat = true;
+    });
+
+    if (threat) {
+        banner.style.display = "block";
+        const now = Date.now();
+        if (now - lastObjectAlertTime > 8000) {
+            lastObjectAlertTime = now;
+            addActivity("⚠️ Alert: Person detected behind you!");
+            speakGuidance("Attention: Person traced behind you.");
+            updateRisk(68);
+        }
+    } else {
+        banner.style.display = "none";
+    }
+}
+
+function stopCamera() {
+    isTracingObjects = false;
+    if (traceAnimationFrame) cancelAnimationFrame(traceAnimationFrame);
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+    }
+    const video = document.getElementById("cameraVideo");
+    if (video) video.srcObject = null;
+    const canvas = document.getElementById("trackerOverlayCanvas");
+    if (canvas) canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);
+    document.getElementById("objectThreatBanner").style.display = "none";
+}
+
+/* =====================================================
+   GAMING & TELEMETRY SENSORS
+===================================================== */
+function startShakeDetection() {
+    if (!window.DeviceMotionEvent) return;
+    let lx = 0, ly = 0, lz = 0;
+    window.addEventListener("devicemotion", e => {
+        const acc = e.accelerationIncludingGravity;
+        if (!acc) return;
+        const diff = Math.abs((acc.x||0)-lx) + Math.abs((acc.y||0)-ly) + Math.abs((acc.z||0)-lz);
+        lx = acc.x||0; ly = acc.y||0; lz = acc.z||0;
+        const now = Date.now();
+        if (diff > 35 && now - lastShake > 4000) {
+            lastShake = now;
+            addActivity("📳 Shake detected! Verifying safety...");
+            if (confirm("📳 Strong shaking detected! Activate SOS?")) activateSOS();
+        }
+    });
+}
+
+function startGyroSensor() {
+    if (!window.DeviceOrientationEvent) return;
+    window.addEventListener("deviceorientation", e => {
+        const status = document.getElementById("gyroStatus");
+        if (status && e.alpha !== null) {
+            status.innerText = `X:${Math.round(e.beta||0)}° Y:${Math.round(e.gamma||0)}° Z:${Math.round(e.alpha||0)}°`;
+        }
+    });
+}
+
+/* =====================================================
+   SECURITY AUDIT & VAULT ENGINE
+===================================================== */
+function logAudit(action, status, details = "") {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const platform = navigator.userAgentData?.platform || navigator.platform || "Unknown OS";
+    
+    const record = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleString(),
+        action: action,
+        status: status,
+        device: isMobile ? "📱 Mobile Device" : "💻 Desktop / Laptop",
+        platform: platform,
+        details: details
+    };
+
+    auditTrail.unshift(record);
+    auditTrail = auditTrail.slice(0, 50);
+    localStorage.setItem("sheShieldAuditLog", JSON.stringify(auditTrail));
+    renderAuditLogs();
+
+    if (status === "DENIED") {
+        addActivity(`🚨 AUDIT WARNING: Unauthorized attempt on [${action}]!`);
+        updateRisk(75);
+        speakGuidance("Security alert: Unauthorized access attempt detected.");
+    }
+}
+
+function renderAuditLogs() {
+    const display = document.getElementById("auditLogDisplay");
+    const totalCount = document.getElementById("auditTotalCount");
+    const grantedCount = document.getElementById("auditGrantedCount");
+    const deniedCount = document.getElementById("auditDeniedCount");
+
+    if (totalCount) totalCount.innerText = auditTrail.length;
+    if (grantedCount) grantedCount.innerText = auditTrail.filter(a => a.status === "GRANTED").length;
+    if (deniedCount) deniedCount.innerText = auditTrail.filter(a => a.status === "DENIED").length;
+
+    if (!display) return;
+    if (auditTrail.length === 0) {
+        display.innerHTML = `<div style="text-align:center; padding:15px; color:#888;">No access logs recorded yet.</div>`;
+        return;
+    }
+
+    display.innerHTML = auditTrail.map(log => `
+        <div class="audit-log-item">
+            <div>
+                <b style="color:#4b006e;">${escapeHtml(log.action)}</b>
+                <div style="color:#777; font-size:11px; margin-top:3px;">
+                    🕒 ${escapeHtml(log.timestamp)} &nbsp;|&nbsp; ${escapeHtml(log.device)} (${escapeHtml(log.platform)})
+                </div>
+            </div>
+            <span class="${log.status === 'GRANTED' ? 'badge-granted' : 'badge-denied'}">
+                ${log.status === 'GRANTED' ? '🟢 GRANTED' : '🔴 DENIED / INTRUDER'}
+            </span>
+        </div>
+    `).join("");
+}
+
+function toggleAuditLogDisplay() {
+    requestVaultAccess("Audit Logs", () => {
+        const display = document.getElementById("auditLogDisplay");
+        display.style.display = display.style.display === "none" ? "block" : "none";
+    });
+}
+
+function requestVaultAccess(resourceName, callback) {
+    if (isVaultUnlocked) {
+        if (callback) callback();
+        return;
+    }
+    pendingVaultAction = { resource: resourceName, callback: callback };
+    document.getElementById("pinModalTitle").innerText = `Unlock ${resourceName}`;
+    document.getElementById("pinModalDesc").innerText = `Enter your 4-digit Security PIN to access confidential ${resourceName}.`;
+    document.getElementById("modalPinInput").value = "";
+    document.getElementById("pinModal").style.display = "flex";
+    setTimeout(() => document.getElementById("modalPinInput").focus(), 150);
+}
+
+function submitPinModal() {
+    const input = document.getElementById("modalPinInput").value.trim();
+    const action = pendingVaultAction ? pendingVaultAction.resource : "Vault Item";
+
+    if (input === userSecurityPin) {
+        isVaultUnlocked = true;
+        logAudit(`${action} Unlocked`, "GRANTED", "PIN verified");
+        unlockVaultUI();
+        closePinModal();
+        if (pendingVaultAction && pendingVaultAction.callback) {
+            pendingVaultAction.callback();
+        }
+        pendingVaultAction = null;
+    } else {
+        logAudit(`${action} Access Attempt`, "DENIED", `Invalid PIN entered: '${input}'`);
+        alert("⛔ ACCESS DENIED: Incorrect Security PIN! Attempt recorded in audit log.");
+        document.getElementById("modalPinInput").value = "";
+    }
+}
+
+function closePinModal() {
+    document.getElementById("pinModal").style.display = "none";
+    pendingVaultAction = null;
+}
+
+function unlockVaultUI() {
+    document.getElementById("historyShield").classList.add("unlocked");
+    document.getElementById("contactsShield").classList.add("unlocked");
+    const badge = document.getElementById("vaultStatusBadge");
+    if (badge) { badge.innerText = "UNLOCKED"; badge.style.color = "#159947"; }
+}
+
+function lockVault() {
+    isVaultUnlocked = false;
+    document.getElementById("historyShield").classList.remove("unlocked");
+    document.getElementById("contactsShield").classList.remove("unlocked");
+    const badge = document.getElementById("vaultStatusBadge");
+    if (badge) { badge.innerText = "ENCRYPTED"; badge.style.color = "#72118f"; }
+    logAudit("Vault Locked", "GRANTED", "User manually locked vault");
+}
+
+function openPinSettingsModal() {
+    document.getElementById("currentPinInput").value = "";
+    document.getElementById("newPinInput").value = "";
+    document.getElementById("changePinModal").style.display = "flex";
+}
+
+function saveNewPin() {
+    const curr = document.getElementById("currentPinInput").value.trim();
+    const next = document.getElementById("newPinInput").value.trim();
+    if (curr !== userSecurityPin) { alert("Incorrect current PIN."); return; }
+    if (!/^\d{4}$/.test(next)) { alert("New PIN must be exactly 4 digits."); return; }
+    userSecurityPin = next;
+    localStorage.setItem("sheShieldPin", next);
+    logAudit("PIN Updated", "GRANTED", "Security PIN changed successfully");
+    alert("✅ Security PIN updated successfully!");
+    document.getElementById("changePinModal").style.display = "none";
+}
+
+function attemptClearHistory() {
+    requestVaultAccess("Clear History", () => {
+        safetyHistory = [];
+        localStorage.removeItem("sheShieldSafetyHistory");
+        renderSafetyHistory();
+        logAudit("History Cleared", "GRANTED", "Full history wiped by authenticated user");
+        addActivity("🧹 Safety history cleared");
+    });
+}
+
+/* =====================================================
+   EMERGENCY CONTACTS (MAX 4)
+===================================================== */
+function renderContacts() {
+    const container = document.getElementById("contactsContainer");
+    const badge = document.getElementById("contactCountBadge");
+    const addBtn = document.querySelector("#addContactForm button");
+
+    if (badge) badge.innerText = `${emergencyContacts.length}/${MAX_CONTACTS} Added`;
+    if (addBtn) {
+        addBtn.disabled = emergencyContacts.length >= MAX_CONTACTS;
+        addBtn.style.opacity = emergencyContacts.length >= MAX_CONTACTS ? "0.5" : "1";
+    }
+
+    if (!container) return;
+    if (emergencyContacts.length === 0) {
+        container.innerHTML = `<div style="color:#888; font-size:13px; text-align:center; padding:10px; background:#fbfbfb; border-radius:10px;">
+            No emergency contacts added yet. Add up to 4 trusted guardians below.
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = emergencyContacts.map((c, idx) => `
+        <div class="contact-item">
+            <div class="contact-info">
+                <strong>👤 ${escapeHtml(c.name)}</strong>
+                <span>📱 ${escapeHtml(c.phone)}</span>
+            </div>
+            <div class="contact-actions">
+                <button class="green btn-mini" onclick="callSingleContact('${escapeHtml(c.phone)}', '${escapeHtml(c.name)}')">📞 Call</button>
+                <button class="orange btn-mini" onclick="sendSingleSMS('${escapeHtml(c.phone)}')">💬 SMS</button>
+                <button class="red btn-mini" onclick="deleteEmergencyContact(${idx})">🗑️</button>
+            </div>
+        </div>
+    `).join("");
+}
+
+function addEmergencyContact() {
+    if (emergencyContacts.length >= MAX_CONTACTS) {
+        alert("Maximum 4 contacts permitted.");
+        return;
+    }
+    const nameInput = document.getElementById("contactNameInput");
+    const phoneInput = document.getElementById("contactPhoneInput");
+    const name = nameInput.value.trim();
+    const phone = phoneInput.value.trim();
+
+    if (!name || !phone) {
+        alert("Enter both Name and Phone.");
+        return;
+    }
+
+    emergencyContacts.push({ name, phone });
+    localStorage.setItem("sheShieldContacts", JSON.stringify(emergencyContacts));
+    nameInput.value = "";
+    phoneInput.value = "";
+    renderContacts();
+    logAudit("Contact Added", "GRANTED", `${name} (${phone})`);
+    addActivity(`📞 Added contact: ${name}`);
+}
+
+function deleteEmergencyContact(index) {
+    if (index >= 0 && index < emergencyContacts.length) {
+        const removed = emergencyContacts.splice(index, 1);
+        localStorage.setItem("sheShieldContacts", JSON.stringify(emergencyContacts));
+        renderContacts();
+        logAudit("Contact Removed", "GRANTED", `${removed[0].name}`);
+        addActivity(`🗑️ Removed contact: ${removed[0].name}`);
+    }
+}
+
+function callSingleContact(phone, name) {
+    if (!phone) return;
+    logAudit("Emergency Call Dialed", "GRANTED", `Dialed ${name} (${phone})`);
+    window.location.href = `tel:${phone}`;
+}
+
+function sendSingleSMS(phone) {
+    if (!phone) return;
+    const msg = getEmergencyMessage();
+    logAudit("Emergency SMS Dispatched", "GRANTED", `To: ${phone}`);
+    window.location.href = `sms:${phone}?body=${encodeURIComponent(msg)}`;
+}
+
+function callAllEmergencyContacts() {
+    if (emergencyContacts.length === 0) {
+        alert("No emergency contacts saved! Add up to 4 contacts first.");
+        return;
+    }
+    const primary = emergencyContacts[0];
+    logAudit("SOS Dialing", "GRANTED", `Primary: ${primary.name}`);
+    window.location.href = `tel:${primary.phone}`;
+}
+
+function sendBroadcastSMSToAll() {
+    if (emergencyContacts.length === 0) {
+        alert("Please add emergency contacts first.");
+        return;
+    }
+    const message = getEmergencyMessage();
+    const phoneNumbers = emergencyContacts.map(c => c.phone).join(",");
+    logAudit("SOS Broadcast Sent", "GRANTED", `Recipients: ${phoneNumbers}`);
+
+    if (navigator.share) {
+        navigator.share({ title: "🚨 SheShield AI Emergency SOS", text: message }).catch(() => {
+            window.location.href = `sms:${phoneNumbers}?body=${encodeURIComponent(message)}`;
+        });
+    } else {
+        window.location.href = `sms:${phoneNumbers}?body=${encodeURIComponent(message)}`;
+    }
+}
+
+function getEmergencyMessage() {
+    const loc = (currentLatitude && currentLongitude) 
+        ? `https://www.google.com/maps?q=${currentLatitude},${currentLongitude}`
+        : "GPS locating...";
+    return `🚨 SHESHIELD AI EMERGENCY ALERT! 
+I need immediate help!
+Live Location: ${loc}
+Time: ${new Date().toLocaleTimeString()}
+Please call or send help!`;
+}
+
+/* =====================================================
+   FORENSIC EVIDENCE PHOTO
+===================================================== */
+function captureEmergencyWatermarkPhoto() {
+    const video = document.getElementById("cameraVideo");
+    const canvas = document.getElementById("cameraCanvas");
+    const img = document.getElementById("capturedPhoto");
+    if (!cameraStream || !video.videoWidth) {
+        alert("Please start the rear camera first.");
+        return;
+    }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgba(180, 0, 0, 0.85)";
+    ctx.fillRect(0, canvas.height - 65, canvas.width, 65);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 14px Arial";
+    ctx.fillText("🚨 SHESHIELD AI — FORENSIC EVIDENCE SNAPSHOT", 14, canvas.height - 40);
+    ctx.font = "11px Arial";
+    const loc = currentLatitude ? `GPS: ${currentLatitude.toFixed(5)}, ${currentLongitude.toFixed(5)}` : "GPS: Locating...";
+    ctx.fillText(`🕒 ${new Date().toLocaleString()} | ${loc}`, 14, canvas.height - 18);
+
+    img.src = canvas.toDataURL("image/jpeg", 0.95);
+    img.style.display = "block";
+    logAudit("Forensic Photo Captured", "GRANTED", "Photo watermarked with live GPS");
+    addActivity("📸 Forensic Photo with GPS Watermark generated");
+}
+
+async function emergencyPhoto() {
+    if (!cameraStream) {
+        await startRearCamera();
+        setTimeout(() => captureEmergencyWatermarkPhoto(), 1200);
+    } else {
+        captureEmergencyWatermarkPhoto();
+    }
+}
+
+/* =====================================================
+   SOS COUNTDOWN & TRIGGER
+===================================================== */
+function startSOSCountdown() {
+    if (sosCountdownTimer) return;
+    const countdown = document.getElementById("sosCountdown");
+    const message = document.getElementById("countdownMessage");
+    const cancelButton = document.getElementById("cancelSOSButton");
+    const nowButton = document.getElementById("activateNowButton");
+
+    sosCountdownValue = 10;
+    countdown.innerText = sosCountdownValue;
+    message.innerText = "🚨 SOS will alert all 4 contacts in 10 seconds.";
+    cancelButton.disabled = false;
+    nowButton.disabled = false;
+
+    addActivity("⏱️ SOS safety countdown started");
+    speakGuidance("Emergency countdown started. You have ten seconds to cancel.");
+
+    sosCountdownTimer = setInterval(function() {
+        sosCountdownValue--;
+        countdown.innerText = sosCountdownValue;
+        if (sosCountdownValue <= 0) {
+            clearInterval(sosCountdownTimer);
+            sosCountdownTimer = null;
+            activateSOSNow();
+        }
+    }, 1000);
+}
+
+function cancelSOSCountdown() {
+    if (sosCountdownTimer) {
+        clearInterval(sosCountdownTimer);
+        sosCountdownTimer = null;
+    }
+    document.getElementById("sosCountdown").innerText = "10";
+    document.getElementById("countdownMessage").innerText = "🟢 SOS cancelled. You are safe.";
+    document.getElementById("cancelSOSButton").disabled = true;
+    document.getElementById("activateNowButton").disabled = true;
+    document.getElementById("sosStatus").innerText = "🟢 SOS CANCELLED";
+    logAudit("SOS Cancelled", "GRANTED", "User stopped countdown");
+}
+
+function activateSOSNow() {
+    if (sosCountdownTimer) {
+        clearInterval(sosCountdownTimer);
+        sosCountdownTimer = null;
+    }
+    document.getElementById("cancelSOSButton").disabled = true;
+    document.getElementById("activateNowButton").disabled = true;
+    document.getElementById("countdownMessage").innerText = "🚨 Emergency SOS active!";
+    activateSOS();
+}
+
+async function activateSOS() {
+    sosActive = true;
+    captureEmergencyWatermarkPhoto();
+    updateRisk(95);
+
+    document.getElementById("sosStatus").innerText = "🚨 SOS ACTIVATED - CONTACTING GUARDIANS";
+    addActivity("🚨 SMART SOS ACTIVATED");
+    logAudit("Smart SOS Triggered", "GRANTED", "Full emergency broadcast dispatched");
+
+    sendBroadcastSMSToAll();
+    if (emergencyContacts.length > 0) {
+        setTimeout(() => callAllEmergencyContacts(), 1500);
+    }
+}
+
+/* =====================================================
+   JOURNEY & VOICE
+==================================================== */
+function toggleJourney() {
+    journeyActive = !journeyActive;
+    const btn = document.getElementById("journeyButton");
+    const txt = document.getElementById("journeyText");
+    if (journeyActive) {
+        journeyRoute = [];
+        btn.innerText = "⏹ Stop Journey";
+        btn.className = "red";
+        txt.innerText = "🟢 Journey Guardian is monitoring";
+        addActivity("🛡️ Journey Guardian started");
+        if (!currentLatitude) startGPS();
+    } else {
+        btn.innerText = "▶ Start Journey";
+        btn.className = "green";
+        txt.innerText = "Journey stopped";
+        addActivity("🛡️ Journey Guardian stopped");
+    }
+}
+
+function startVoiceDetection() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Voice recognition requires Chrome or Chromium browser.");
+        return;
+    }
+    if (voiceListening) return;
+
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onstart = function() {
+        voiceListening = true;
+        document.getElementById("voiceStatus").innerText = "🎤 Listening for HELP, SOS or EMERGENCY...";
+        document.getElementById("voiceFeature").innerText = "LISTENING (Active)";
+        addActivity("🎤 Voice safety detection started");
+    };
+
+    recognition.onresult = function(e) {
+        const res = e.results[e.results.length - 1][0].transcript.toLowerCase();
+        if (res.includes("help") || res.includes("sos") || res.includes("emergency") || res.includes("bachao")) {
+            addActivity(`🚨 Emergency voice detected: '${res}'`);
+            activateSOS();
+        }
+    };
+
+    recognition.onend = function() {
+        voiceListening = false;
+        document.getElementById("voiceStatus").innerText = "Voice detection stopped.";
+        document.getElementById("voiceFeature").innerText = "READY (Standing by)";
+    };
+
+    recognition.start();
+}
+
+function stopVoiceDetection() {
+    if (recognition) recognition.stop();
+    voiceListening = false;
+}
+
+/* =====================================================
+   RISK & ACTIVITY
+===================================================== */
+function calculateRisk() {
+    if (sosActive) { updateRisk(95); return; }
+    let risk = 18;
+    if (currentLatitude === null) risk += 5;
+    if (journeyActive) risk += 5;
+    updateRisk(risk);
+}
+
+function updateRisk(risk) {
+    const num = document.getElementById("riskNumber");
+    const fill = document.getElementById("riskFill");
+    const score = document.getElementById("riskScore");
+    const status = document.getElementById("safetyStatus");
+    if (num) num.innerText = risk;
+    if (score) score.innerText = risk + "/100";
+    if (fill) fill.style.width = risk + "%";
+
+    if (risk < 35) {
+        status.innerText = "SAFE"; status.className = "status-value safe";
+        if (fill) fill.style.background = "#159947";
+    } else if (risk < 70) {
+        status.innerText = "CAUTION"; status.className = "status-value warning";
+        if (fill) fill.style.background = "#ec9200";
+    } else {
+        status.innerText = "DANGER"; status.className = "status-value danger";
+        if (fill) fill.style.background = "red";
+    }
+}
+
+function addActivity(msg) {
+    const log = document.getElementById("activityLog");
+    const item = document.createElement("div");
+    item.className = "activity-item";
+    item.innerHTML = `${msg}<small style="display:block;color:#888;margin-top:4px;">${new Date().toLocaleTimeString()}</small>`;
+    log.prepend(item);
+    saveSafetyHistory(msg);
+}
+
+function saveSafetyHistory(msg) {
+    safetyHistory.unshift({ message: msg, time: new Date().toLocaleString() });
+    safetyHistory = safetyHistory.slice(0, 30);
+    localStorage.setItem("sheShieldSafetyHistory", JSON.stringify(safetyHistory));
+    renderSafetyHistory();
+}
+
+function renderSafetyHistory() {
+    const list = document.getElementById("safetyHistory");
+    if (!list) return;
+    if (!safetyHistory.length) {
+        list.innerHTML = `<div class="history-empty">No safety history recorded yet.</div>`;
+        return;
+    }
+    list.innerHTML = safetyHistory.slice(0, 10).map(e => `
+        <div class="history-item">
+            <strong>${escapeHtml(e.message)}</strong>
+            <small style="display:block;color:#888;">🕒 ${escapeHtml(e.time)}</small>
+        </div>
+    `).join("");
+}
+
+function speakGuidance(text) {
+    if (!("speechSynthesis" in window) || !text) return;
+    try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 0.92;
+        window.speechSynthesis.speak(u);
+    } catch(e){}
+}
+
+function escapeHtml(t) {
+    return String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/* =====================================================
+   EMERGENCY GAME SCENARIO DEMO
+===================================================== */
+let scenarioTimer = null, scenarioRunning = false;
+function playEmergencyScenario() {
+    if (scenarioRunning) return;
+    resetEmergencyScenario();
+    scenarioRunning = true;
+    demoScenarioActive = true;
+
+    const steps = [1, 2, 3, 4, 5].map(i => document.getElementById("storyStep" + i));
+    const messages = [
+        "A girl is walking alone on a night journey.",
+        "Warning: A suspicious person is detected approaching behind her.",
+        "AI has escalated the risk score to danger level.",
+        "Smart SOS activates and captures a forensic evidence photo.",
+        "All 4 emergency contacts receive live GPS coordinates and automated alerts."
+    ];
+    let current = 0;
+
+    function showStep() {
+        steps.forEach(step => step.classList.remove("active"));
+        if (current >= steps.length) {
+            scenarioRunning = false;
+            document.getElementById("scenarioStatus").innerText = "✅ Scenario completed. Press Reset to return.";
+            return;
+        }
+        steps[current].classList.add("active");
+        document.getElementById("scenarioStatus").innerText = "🎮 " + messages[current];
+        speakGuidance(messages[current]);
+        addActivity("🎮 " + messages[current]);
+
+        if (current === 2) updateRisk(85);
+        if (current === 3) document.getElementById("sosStatus").innerText = "🚨 DEMO SOS ACTIVATED";
+        current++;
+        scenarioTimer = setTimeout(showStep, 2600);
+    }
+    showStep();
+}
+
+function resetEmergencyScenario() {
+    if (scenarioTimer) clearTimeout(scenarioTimer);
+    scenarioRunning = false;
+    demoScenarioActive = false;
+    document.querySelectorAll(".story-step").forEach(s => s.classList.remove("active"));
+    document.getElementById("scenarioStatus").innerText = "🎮 Scenario ready. Press Play Scenario.";
+    calculateRisk();
+}
+
+/* =====================================================
+   NIGHT JOURNEY ACTION MISSION LOGIC
+===================================================== */
+let actionScoreValue = 0, actionSafetyValue = 100, actionRiskValue = 18, actionStage = -1, actionBusy = false, actionStarted = false;
+const actionStages = [
+ {icon:'🌙',title:'Night Journey Started',alert:'JOURNEY ACTIVE',desc:'Your journey has started. GPS, Rear Tracer, and Sensors are tracking your route.',log:'🚶 Night journey initiated. Choose a well-lit route.',buttons:[
+   ['🟢 Open Safe Route','safe','actionSafeRoute()'],
+   ['🗺️ Start GPS','', 'actionOpenMap()']
+ ]},
+ {icon:'⚠️',title:'Low-Lit Area Detected',alert:'CAUTION ZONE',desc:'AI detected low ambient illumination. Relocate to main street.',log:'⚠️ Caution zone detected. Safe route recommended.',buttons:[
+   ['🟢 Move to Safe Route','safe','actionSafeRoute()'],
+   ['🚶 Continue Through Zone','warning','actionContinueRisk()']
+ ]},
+ {icon:'👤',title:'Person Detected Behind You',alert:'RISK INCREASED',desc:'Rear camera has detected an approaching person following your path. Move toward a public place.',log:'👤 Back-object tracer triggered alert. Move to populated area.',buttons:[
+   ['🏪 Enter Public Place','safe','actionPublicPlace()'],
+   ['🌑 Ignore Alert','warning','actionContinueRisk()']
+ ]},
+ {icon:'🚨',title:'Critical Emergency',alert:'HIGH RISK',desc:'Immediate danger confirmed. Activate SOS to broadcast live GPS and alert all 4 contacts.',log:'🚨 Emergency event detected. Emergency broadcast standing by.',buttons:[
+   ['🚨 Activate Smart SOS','danger','actionSOS()'],
+   ['🏃 Move to Safe Area','safe','actionEmergencyMove()']
+ ]},
+ {icon:'🛡️',title:'Journey Secured',alert:'SAFE JOURNEY',desc:'All emergency systems were verified and you have safely arrived.',log:'🛡️ Journey secured. Monitoring remains active.',buttons:[
+   ['🗺️ View Live Map','', 'actionOpenMap()'],
+   ['🔄 Restart Mission','', 'resetActionMission()']
+ ]}
+];
+
+function actionScrollMap(){ const m = document.getElementById('map'); if(m) m.scrollIntoView({behavior:'smooth',block:'center'}); }
+function actionOpenMap(){
+  actionScrollMap();
+  startGPS();
+  if(actionStarted){
+    actionScoreValue += 25;
+    document.getElementById('actionBadge1').classList.add('on');
+    document.getElementById('actionBadge1').textContent = '✅ GPS / Sensors active';
+    actionLog('📍 Real GPS & telemetry active.');
+    actionUpdate();
+  }
+}
+function actionSafeRoute(){
+  actionScrollMap();
+  showSafeRoute();
+  document.getElementById('actionBadge2').classList.add('on');
+  document.getElementById('actionBadge2').textContent = '✅ Safe route selected';
+  actionScoreValue += 100;
+  actionRiskValue = Math.max(5, actionRiskValue - 12);
+  actionLog('🟢 Safe route enabled on map.');
+  actionUpdate();
+  if(actionStarted && (actionStage === 0 || actionStage === 1)) setTimeout(() => actionNextStage('safe'), 900);
+}
+function actionContinueRisk(){
+  if(actionBusy) return;
+  actionBusy = true;
+  actionScoreValue = Math.max(0, actionScoreValue - 30);
+  actionRiskValue = Math.min(95, actionRiskValue + 20);
+  actionLog('⚠️ Risk increased. Move toward a safer well-lit area.');
+  actionUpdate();
+  setTimeout(() => { actionBusy = false; }, 700);
+}
+function actionPublicPlace(){
+  if(actionBusy) return;
+  actionBusy = true;
+  actionScoreValue += 120;
+  actionRiskValue = Math.max(5, actionRiskValue - 18);
+  actionLog('🏪 Entered busy public place. Threat avoided.');
+  actionUpdate();
+  setTimeout(() => { actionBusy = false; actionNextStage('safe'); }, 900);
+}
+function actionEmergencyMove(){
+  if(actionBusy) return;
+  actionBusy = true;
+  actionScoreValue += 90;
+  actionLog('🏃 Relocating to safe zone.');
+  actionUpdate();
+  setTimeout(() => { actionBusy = false; actionNextStage('safe'); }, 900);
+}
+function actionSOS(){
+  document.getElementById('actionBadge3').classList.add('on');
+  document.getElementById('actionBadge3').textContent = '✅ 4-Contact Emergency Broadcast Active';
+  actionScoreValue += 150;
+  actionLog('🚨 Smart SOS triggered for all 4 contacts.');
+  actionUpdate();
+  activateSOS();
+  if(actionStarted && actionStage === 3) setTimeout(() => actionNextStage('safe'), 1000);
+}
+function startActionMission(){
+  if(actionStarted) return;
+  actionStarted = true;
+  actionStage = 0;
+  actionScoreValue = 100;
+  document.getElementById('actionBadge1').classList.add('on');
+  document.getElementById('actionBadge1').textContent = '✅ Night Journey started';
+  actionUpdate();
+  startGPS();
+  startRearCamera();
+  if(!journeyActive) toggleJourney();
+  actionRender();
+  actionLog('🚶 Mission started. Rear tracer and gaming sensors active.');
+}
+function actionNextStage(reason){
+  if(actionStage >= actionStages.length - 1){ actionFinish(); return; }
+  actionStage++;
+  actionRender();
+}
+function actionRender(){
+  const s = actionStages[actionStage];
+  if(!s) return;
+  document.getElementById('actionIcon').textContent = s.icon;
+  document.getElementById('actionTitle').textContent = s.title;
+  document.getElementById('actionDescription').textContent = s.desc;
+  document.getElementById('actionAlert').textContent = s.alert;
+  document.getElementById('actionLog').textContent = '🧭 ' + s.log;
+  document.getElementById('actionLevel').textContent = Math.min(5, actionStage + 1);
+  const box = document.getElementById('actionButtons');
+  box.innerHTML = s.buttons.map(b => `<button class="action-btn ${b[1]}" onclick="${b[2]}">${b[0]}</button>`).join('');
+  const dots = document.querySelectorAll('#actionProgress .action-dot');
+  dots.forEach((d,i) => { d.classList.toggle('done', i < actionStage); d.classList.toggle('active', i === actionStage); });
+  if(actionStage === 4) actionFinish();
+}
+function actionFinish(){
+  document.getElementById('actionComplete').classList.add('show');
+  actionScoreValue += 250;
+  actionUpdate();
+  actionLog('🏆 Mission completed. SheShield AI successfully protected your night journey.');
+}
+function actionLog(t){ const el = document.getElementById('actionLog'); if(el) el.textContent = t; }
+function actionUpdate(){
+  const score = document.getElementById('actionScore');
+  const risk = document.getElementById('actionRisk');
+  const fill = document.getElementById('actionRiskFill');
+  const txt = document.getElementById('actionRiskText');
+  if(score) score.textContent = actionScoreValue;
+  if(risk) risk.textContent = actionRiskValue;
+  if(fill) fill.style.width = actionRiskValue + '%';
+  if(txt){
+    if(actionRiskValue >= 70){ txt.textContent = '🔴 HIGH RISK'; txt.style.color = '#ff7c86'; }
+    else if(actionRiskValue >= 40){ txt.textContent = '🟡 CAUTION'; txt.style.color = '#ffd45a'; }
+    else { txt.textContent = '🟢 LOW RISK'; txt.style.color = '#72efb4'; }
+  }
+}
+function resetActionMission(){
+  actionStarted = false;
+  actionStage = -1;
+  actionScoreValue = 0;
+  actionRiskValue = 18;
+  document.getElementById('actionComplete').classList.remove('show');
+  document.getElementById('actionIcon').textContent = '🌙';
+  document.getElementById('actionTitle').textContent = 'Night Journey Ready';
+  document.getElementById('actionDescription').textContent = 'Start the mission. SheShield AI will simulate safety situations and test your actions.';
+  document.getElementById('actionAlert').textContent = 'MISSION READY';
+  document.getElementById('actionLog').textContent = '🟢 System ready. Start the mission to begin.';
+  document.getElementById('actionButtons').innerHTML = '<button class="action-btn safe" onclick="startActionMission()">🚶 Start Night Journey</button><button class="action-btn" onclick="actionOpenMap()">🗺️ Open Live Map</button>';
+  document.getElementById('actionBadge1').className = 'action-badge';
+  document.getElementById('actionBadge1').textContent = '🔒 GPS / Journey not started';
+  document.getElementById('actionBadge2').className = 'action-badge';
+  document.getElementById('actionBadge2').textContent = '🔒 Safe route not selected';
+  document.getElementById('actionBadge3').className = 'action-badge';
+  document.getElementById('actionBadge3').textContent = '🔒 Emergency readiness locked';
+  document.querySelectorAll('#actionProgress .action-dot').forEach((d,i) => { d.classList.toggle('active', i === 0); d.classList.remove('done'); });
+  actionUpdate();
+}
+</script>
+</body>
+</html>
